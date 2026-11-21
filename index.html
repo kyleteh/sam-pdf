@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SAM PDF Downloader</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;max-width:860px;margin:30px auto;padding:0 16px;color:#222;background:#f6f7fb}
+h1{font-size:22px;margin-bottom:4px}
+p.sub{color:#666;margin-top:0}
+textarea{width:100%;height:140px;font-size:14px;padding:10px;border:2px solid #c7cbe0;border-radius:8px;box-sizing:border-box}
+textarea:focus{outline:none;border-color:#4a6cf7}
+.btns{margin:10px 0;display:flex;gap:8px}
+button{font-size:15px;padding:9px 18px;border:0;border-radius:6px;cursor:pointer}
+#go{background:#4a6cf7;color:#fff}#clear{background:#e3e5ef}
+.item{background:#fff;border-radius:8px;padding:12px;margin:8px 0;box-shadow:0 1px 3px #0001}
+.name{font-weight:600;margin-bottom:4px;word-break:break-all}
+.url{font-size:12px;color:#666;word-break:break-all;margin-bottom:8px}
+.item a.dl{background:#2e9e5b;color:#fff;padding:6px 14px;border-radius:5px;text-decoration:none;font-size:14px}
+.err{color:#c0392b;font-weight:600}
+.fixed{font-size:12px;color:#b07d00;margin-bottom:6px}
+.note{font-size:12px;color:#888;margin-top:24px}
+</style></head><body>
+<h1>SAM PDF Downloader</h1>
+<p class="sub">Paste one or more SAM viewer links below (any messy text is fine), then click <b>Convert</b>.</p>
+<textarea id="in" placeholder="Paste SAM links here..."></textarea>
+<div class="btns"><button id="go">Convert</button><button id="clear">Clear</button></div>
+<div id="out"></div>
+<p class="note">Open the download links in the same browser where you are logged in to SAM. Use fresh links: old ones may say "no permission" because the ticket has expired. Nothing is sent anywhere; conversion happens in this page only.</p>
+<script>
+const HOST='https://samadmin.azurewebsites.net/';
+function safeDecode(s){try{return decodeURIComponent(s)}catch(e){return s.replace(/%2f/gi,'/').replace(/%3f/gi,'?').replace(/%3d/gi,'=').replace(/%26/gi,'&').replace(/%2b/gi,'+')}}
+function fixOne(raw){
+  const fixes=[];
+  let s=raw.replace(/\s+/g,'');
+  if(/^https?%3a%2f%2f/i.test(s)){s=safeDecode(s);fixes.push('decoded link');}                       // remove spaces / line breaks inside the link
+  if(s!==raw.trim())fixes.push('removed spaces/line breaks');
+  s=s.replace(/&amp;/gi,'&');
+  if(!/^https?:\/\//i.test(s)){s='https://'+s.replace(/^\/+/,'');fixes.push('added https://');}
+  s=s.replace(/^http:\/\//i,'https://');
+  // decode repeatedly until "file=" or ".ashx?" appears (handles double-encoded links)
+  for(let i=0;i<3 && !/file=|\.ashx\?/i.test(s);i++){const d=safeDecode(s);if(d===s)break;s=d;fixes.push('decoded link');}
+  const host=(s.match(/^https?:\/\/[^\/]+\//i)||[HOST])[0];
+  let m=s.match(/[?&]file=([^&#]+)/i);
+  let inner;
+  if(m){
+    inner=m[1];
+    // an unencoded file= value swallows the rest of the query
+    if(!/%3f/i.test(inner)){inner=s.slice(s.search(/[?&]file=/i)+6);}
+    inner=safeDecode(inner);
+  }else if(/\.ashx\?/i.test(s)){
+    inner=s.replace(/^https?:\/\/[^\/]+\//i,'');   // already a download link
+    fixes.push('already a download link');
+  }else return {error:'Not a SAM PDF link'};
+  inner=inner.replace(/^(\.\.\/)+/,'').replace(/^\/+/,'').replace(/^worksheet_management\/\.\.\//i,'');
+  if(!/\.ashx\?/i.test(inner))return {error:'Could not find the PDF file in this link'};
+  const url=host+inner;
+  const fm=inner.match(/filename=([^&]+)/i);
+  let name=fm?safeDecode(fm[1].replace(/\+/g,' ')):'PDF';
+  name=name.replace(/^\d+_/,'');
+  if(/ViewSolutionsPdf/i.test(inner)&&!/ticket=/i.test(inner))fixes.push('WARNING: ticket missing - copy the full link again');
+  return {url,name,fixes};
+}
+function extract(text){
+  const toks=text.replace(/&amp;/gi,'&').split(/\s+/).filter(Boolean);
+  const isStart=t=>/(https?:|https?%3a|samadmin\.)/i.test(t);
+  const links=[];let cur=null;
+  for(let t of toks){
+    if(isStart(t)){
+      if(cur)links.push(cur);
+      cur=t.replace(/^.*?(?=https?:|https?%3a|samadmin\.)/i,'');
+    }else if(cur && /[%=&\/]|\d/.test(t) && !/^[A-Za-z]+[.,!?]?$/.test(t)){
+      cur+=t;   // piece of a link broken across lines
+    }else if(cur){links.push(cur);cur=null;}
+  }
+  if(cur)links.push(cur);
+  return links.map(l=>l.replace(/["'<>,;)\]]+$/,'')).filter(l=>/samadmin|\.ashx|\.aspx|file=/i.test(l));
+}
+function run(){
+  const out=document.getElementById('out');out.innerHTML='';
+  const links=extract(document.getElementById('in').value);
+  if(!links.length){out.innerHTML='<div class="item err">No SAM link found. Copy the address of the SAM PDF viewer page and paste it here.</div>';return;}
+  links.forEach(l=>{
+    const r=fixOne(l);const d=document.createElement('div');d.className='item';
+    if(r.error){d.innerHTML='<div class="err">'+r.error+'</div><div class="url"></div>';d.querySelector('.url').textContent=l;}
+    else{
+      d.innerHTML='<div class="name"></div>'+(r.fixes.length?'<div class="fixed"></div>':'')+'<div class="url"></div><a class="dl" target="_blank" rel="noopener">Download</a>';
+      d.querySelector('.name').textContent=r.name;
+      if(r.fixes.length)d.querySelector('.fixed').textContent='Auto-fixed: '+[...new Set(r.fixes)].join(', ');
+      d.querySelector('.url').textContent=r.url;d.querySelector('a').href=r.url;
+    }
+    out.appendChild(d);
+  });
+}
+document.getElementById('go').onclick=run;
+document.getElementById('clear').onclick=()=>{document.getElementById('in').value='';document.getElementById('out').innerHTML='';document.getElementById('in').focus();};
+document.getElementById('in').addEventListener('paste',()=>setTimeout(run,0));
+if(typeof module!=='undefined')module.exports={fixOne,extract};
+</script></body></html>
