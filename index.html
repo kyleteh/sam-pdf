@@ -82,7 +82,7 @@ function run(){
     const r=fixOne(l);const d=document.createElement('div');d.className='item';
     if(r.error){d.innerHTML='<div class="err">'+r.error+'</div><div class="url"></div>';d.querySelector('.url').textContent=l;}
     else{
-      d.innerHTML='<div class="name"></div>'+(r.fixes.length?'<div class="fixed"></div>':'')+'<div class="url"></div><a class="dl" target="_blank" rel="noopener">Download</a>';
+      d.innerHTML='<div class="name"></div>'+(r.fixes.length?'<div class="fixed"></div>':'')+'<div class="url"></div><a class="dl" target="_blank" rel="noopener">Open</a>';
       d.querySelector('.name').textContent=r.name;
       if(r.fixes.length)d.querySelector('.fixed').textContent='Auto-fixed: '+[...new Set(r.fixes)].join(', ');
       d.querySelector('.url').textContent=r.url;d.querySelector('a').href=r.url;
