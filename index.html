@@ -20,7 +20,7 @@ button{font-size:15px;padding:9px 18px;border:0;border-radius:6px;cursor:pointer
 .note{font-size:12px;color:#888;margin-top:24px}
 </style></head><body>
 <h1>SAM PDF Downloader</h1>
-<p class="sub">Paste one or more SAM viewer links below (any messy text is fine), then click <b>Convert</b>.</p>
+<p class="sub">Paste one or more SAM viewer links below. They convert automatically.</p>
 <textarea id="in" placeholder="Paste SAM links here..."></textarea>
 <div class="btns"><button id="go">Convert</button><button id="clear">Clear</button></div>
 <div id="out"></div>
@@ -60,7 +60,7 @@ function fixOne(raw){
   return {url,name,fixes};
 }
 function extract(text){
-  const toks=text.replace(/&amp;/gi,'&').split(/\s+/).filter(Boolean);
+  const toks=text.replace(/&amp;/gi,'&').split(/\s+/).flatMap(t=>t.split(/(?=https?:\/\/|https?%3a%2f%2f)|(?<!\/\/|%2f%2f)(?=samadmin\.)/i)).filter(Boolean);
   const isStart=t=>/(https?:|https?%3a|samadmin\.)/i.test(t);
   const links=[];let cur=null;
   for(let t of toks){
